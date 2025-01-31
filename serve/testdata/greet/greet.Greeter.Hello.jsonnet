@@ -33,5 +33,12 @@ function(input)
     {
       response: {
         greeting: '💃 jig [unary]: Hello ' + input.request.firstName,
+        // The working syntax is `foo: { '0': 'bar' }`
+        foo: [  // map<int32, string>
+            {
+              key: '0',  // int32
+              value: 'bar',  // string
+            }
+        ]
       },
     }
