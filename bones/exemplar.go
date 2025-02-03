@@ -196,6 +196,7 @@ func (f *formatter) WellKnownExemplar(md protoreflect.MessageDescriptor) exempla
 func (f *formatter) FieldExemplar(fd protoreflect.FieldDescriptor) exemplar {
 	desc := f.typeDescription(fd)
 	seen := false
+
 	if fd.Kind() == protoreflect.MessageKind || fd.Kind() == protoreflect.GroupKind {
 		seen = f.messagesSeen[fd.Message().FullName()]
 	}
@@ -235,6 +236,44 @@ func (f *formatter) FieldExemplar(fd protoreflect.FieldDescriptor) exemplar {
 // type.
 func (f *formatter) FieldValueExemplar(fd protoreflect.FieldDescriptor) exemplar {
 	var e exemplar
+
+	if fd.IsMap() {
+		keyExemplar := f.ScalarExemplar(fd.MapKey().Kind()).String()
+		valueExemplar := f.FieldValueExemplar(fd.MapValue())
+
+		// Ensure the key is properly quoted (JSON requires string keys)
+		if fd.MapKey().Kind() != protoreflect.StringKind {
+			keyExemplar = f.quote(keyExemplar)
+		}
+
+		// Format the map entry correctly
+		var mapExemplar exemplar
+		if fd.MapValue().Kind() == protoreflect.MessageKind {
+			// Create an indented exemplar for inner message fields
+			innerExemplar := exemplar{}
+
+			for _, line := range valueExemplar.lines {
+				// Ignore the opening/closing `{}`, but indent the content properly
+				if line != "{" && line != "}" {
+					innerExemplar.line(line) // Indent message content inside the map
+				}
+			}
+
+			// Ensure the map key and `{` are on the same line
+			mapExemplar.line(keyExemplar + ": {")
+			mapExemplar.extend(innerExemplar) // Append the properly indented message fields
+			mapExemplar.line("},")            // Close message block with a trailing comma
+		} else {
+			// Normal key-value map pair with trailing comma
+			mapExemplar.line(keyExemplar + ": " + valueExemplar.String() + ",")
+		}
+
+		// Ensure correct indentation
+		mapExemplar.nest("{", "}")
+		e.extend(mapExemplar)
+		return e
+	}
+
 	switch fd.Kind() {
 	case protoreflect.EnumKind:
 		e = f.EnumExemplar(fd)
